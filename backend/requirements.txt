@@ -1,0 +1,26 @@
+# Core API
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Validation & Config
+pydantic
+pydantic-settings
+python-dotenv
+
+# HTTP async
+httpx
+
+# Database
+sqlalchemy
+alembic
+psycopg[binary]
+redis
+
+# Security
+python-jose[cryptography]
+passlib[bcrypt]
+
+# Testing
+pytest
+pytest-asyncio
