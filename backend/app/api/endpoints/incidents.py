@@ -30,8 +30,8 @@ async def analyze_incident(
     from app.agents.pipeline import run_analysis
     
     try:
-        # 1. Appel du pipeline d'agents IA (LangGraph) avec le texte extrait de Pydantic
-        pipeline_result = run_analysis(payload.raw_log)
+        # 1. AJOUT DU AWAIT ICI : On attend la résolution du pipeline et de l'enrichissement OSINT
+        pipeline_result = await run_analysis(payload.raw_log)
         
         # 2. Sérialisation explicite des objets complexes pour éviter les conflits d'insertion ORM
         mitre_techs = pipeline_result.get("mitre_techniques", [])
