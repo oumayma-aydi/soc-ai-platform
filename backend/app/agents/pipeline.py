@@ -7,7 +7,8 @@ from app.agents.remediation import remediation_agent
 
 # === IMPORTS AJOUTÉS ET VÉRIFIÉS ===
 from app.sanitization.sanitizer import DataSanitizer
-from app.services.scoring import ScoringService  # Évite le NameError
+from app.services.scoring import ScoringService  
+from app.enrichment.ioc_service import enrich_ioc  # <-- Importation de ton service OSINT
 
 def build_pipeline():
     """
@@ -33,11 +34,12 @@ def build_pipeline():
 # Instance globale du graphe
 soc_pipeline = build_pipeline()
 
-def run_analysis(raw_log: str, incident_id: str = "INC-001", enrichment: dict = {}) -> SOCState:
+# ⚠️ La fonction doit être 'async def' pour pouvoir utiliser 'await' sur enrich_ioc !
+async def run_analysis(raw_log: str, incident_id: str = "INC-001", enrichment: dict = {}) -> SOCState:
     """
     Point d'entrée unique du SOC AI :
     1. Reçoit le log brut, le nettoie (Sanitization) et extrait les IOCs.
-    2. Injecte l'enrichissement IOC (VirusTotal, AbuseIPDB...) s'il est fourni.
+    2. Si aucun enrichissement n'est fourni, interroge dynamiquement les APIs (VT, AbuseIPDB, OTX).
     3. Exécute le pipeline multi-agents sur ces données validées.
     4. Calcule le score de confiance final.
     """
@@ -47,12 +49,28 @@ def run_analysis(raw_log: str, incident_id: str = "INC-001", enrichment: dict = 
     sanitized_log, extracted_iocs = DataSanitizer.extract_and_sanitize(raw_log)
     print(f"[Pipeline] Sanitization complete. Extracted {len(extracted_iocs)} internal IOCs/Entities.")
 
-    # 2. Configuration de l'état de départ avec le log nettoyé et l'enrichissement
+    # 2. Enrichissement automatique si le dictionnaire fourni est vide
+    auto_enrichment = dict(enrichment)
+    if not auto_enrichment and extracted_iocs:
+        print(f"[Pipeline] Triggering parallel OSINT enrichment for extracted IOCs...")
+        for ioc in extracted_iocs:
+            # On n'enrichit que les types pertinents pris en charge par ton ioc_service
+            if ioc.get("type") in ["ip", "domain", "hash"]:
+                try:
+                    val = ioc.get("value")
+                    print(f"[Pipeline] Enriching {ioc['type']}: {val}...")
+                    # Interrogation parallèle asynchrone
+                    res = await enrich_ioc(ioc["type"], val)
+                    auto_enrichment[val] = res
+                except Exception as e:
+                    print(f"[Pipeline] Error enriching {ioc.get('value')}: {e}")
+
+    # 3. Configuration de l'état de départ avec le log nettoyé et l'enrichissement consolidé
     initial_state: SOCState = {
-        "raw_log": sanitized_log,       # Les agents reçoivent le log APRES sanitization
+        "raw_log": sanitized_log,       
         "incident_id": incident_id,
-        "iocs": extracted_iocs,         # Liste des vrais IOCs isolés en sécurité
-        "enrichment": enrichment,       # Reçoit les données de VirusTotal / AbuseIPDB passées en paramètre
+        "iocs": extracted_iocs,         
+        "enrichment": auto_enrichment,  # <-- Les agents et le Triage reçoivent enfin l'OSINT !
         "incident_type": None,
         "severity": None,
         "urgency": None,
@@ -65,11 +83,10 @@ def run_analysis(raw_log: str, incident_id: str = "INC-001", enrichment: dict = 
         "rag_chunks_used": [],
     }
 
-    # 3. Lancement des agents LangGraph
+    # 4. Lancement des agents LangGraph
     result = soc_pipeline.invoke(initial_state)
     
-    # 4. Calcul déterministe du score de confiance global
-    # (ScoringService analyse maintenant les techniques trouvées + les scores de l'enrichissement)
+    # 5. Calcul déterministe du score de confiance global
     result["confidence_score"] = ScoringService.calculate_confidence(result)
     print(f"[Pipeline] Confidence Score successfully computed: {result['confidence_score']}/1.0")
     
