@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: soc-config
+  namespace: soc-platform
+data:
+  POSTGRES_URL: "postgresql://socuser:socpassword@postgres:5432/socdb"
+  REDIS_URL: "redis://redis:6379"
+  CHROMA_URL: "http://chromadb:8000"
+  ENV: "production"
+  JWT_ALGORITHM: "HS256"
+  ACCESS_TOKEN_EXPIRE_MINUTES: "60"

@@ -1,8 +1,10 @@
 import chromadb
+from urllib.parse import urlparse
 
 from app.rag.embedder import (
     EmbeddingService
 )
+from app.config import get_settings
 
 
 class Retriever:
@@ -11,9 +13,12 @@ class Retriever:
 
         self.embedder = EmbeddingService()
 
+        settings = get_settings()
+        parsed = urlparse(settings.CHROMA_URL)
+
         self.client = chromadb.HttpClient(
-            host="localhost",
-            port=8001
+            host=parsed.hostname,
+            port=parsed.port
         )
 
         self.collection = self.client.get_collection(

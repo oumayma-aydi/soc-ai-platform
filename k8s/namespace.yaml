@@ -1,0 +1,4 @@
+apiVersion: v1  #version de l'API Kubernetes utilisée pour cette ressource (les Namespaces sont une ressource "core" donc juste v1)
+kind: Namespace  #le TYPE de ressource qu'on crée
+metadata:
+  name: soc-platform

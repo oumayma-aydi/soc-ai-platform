@@ -1,5 +1,6 @@
-from pydantic_settings import BaseSettings
+import os
 from functools import lru_cache
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -10,9 +11,9 @@ class Settings(BaseSettings):
     OTX_API_KEY: str
 
     # === DATABASE ===
-    POSTGRES_URL: str = "postgresql://postgres:postgres@localhost:5432/socdb"
-    REDIS_URL: str = "redis://localhost:6379"
-    CHROMA_URL: str = "http://localhost:8001"
+    POSTGRES_URL: str = "postgresql://socuser:socpassword@postgres:5432/socdb"
+    REDIS_URL: str = "redis://redis:6379/0"
+    CHROMA_URL: str = "http://chromadb:8000"
 
     # === SECURITY ===
     JWT_SECRET: str

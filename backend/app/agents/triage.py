@@ -15,8 +15,10 @@ def triage_agent(state: SOCState) -> SOCState:
 
     print("[Triage] Starting classification...")
 
-    # 1. RAG — chercher du contexte sur ce type d'incident
-    rag_results = retrieve(state["raw_log"][:200], top_k=3)
+    # 1. RAG — Chercher sur une portion plus large ou complète du log pour capter LockBit et les CVEs
+    # On passe le log complet (ou les 2000 premiers caractères) pour ne rien rater
+    rag_results = retrieve(state["raw_log"][:2000], top_k=3)
+    
     rag_context = "\n".join([
         f"- [{r['metadata'].get('source','').upper()}] "
         f"{r['metadata'].get('technique','')} : "
@@ -59,7 +61,6 @@ Respond ONLY with a valid JSON object (no markdown, no explanation):
 
     # 4. Parser la réponse JSON
     try:
-        # Nettoyer si le LLM ajoute des backticks
         if "```" in raw:
             raw = raw.split("```")[1]
             if raw.startswith("json"):
@@ -77,11 +78,12 @@ Respond ONLY with a valid JSON object (no markdown, no explanation):
 
     print(f"[Triage] → {result['incident_type']} | Severity: {result['severity']}/10")
 
-    # 5. Mettre à jour l'état
+    # 5. Mettre à jour l'état (On ajoute enfin rag_chunks_used pour l'API !)
     return {
         **state,
         "incident_type": result.get("incident_type", "Unknown"),
         "severity": result.get("severity", 5),
         "urgency": result.get("urgency", "medium"),
         "triage_evidence": result.get("evidence", []),
+        "rag_chunks_used": rag_results  # <-- Crucial pour que le JSON final ne soit plus vide !
     }

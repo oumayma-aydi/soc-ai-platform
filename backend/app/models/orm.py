@@ -1,26 +1,49 @@
-from sqlalchemy import Column, String, Integer, Float, DateTime, JSON
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, JSON
+from sqlalchemy.orm import relationship
+from datetime import datetime, timezone
 from app.core.database import Base
-import datetime
+
+class UserORM(Base):
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True, nullable=False)
+    email = Column(String, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    role = Column(String, default="analyst")
+    is_active = Column(Integer, default=1)  # 1 = Actif, 0 = Bloqué
+    
+    # Politique de sécurité
+    failed_login_attempts = Column(Integer, default=0)
+    password_updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Relation avec l'historique
+    password_history = relationship("UserPasswordHistoryORM", back_populates="user", cascade="all, delete-orphan")
+
+
+class UserPasswordHistoryORM(Base):
+    __tablename__ = "user_password_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    hashed_password = Column(String, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    user = relationship("UserORM", back_populates="password_history")
+
 
 class IncidentORM(Base):
-    """Représentation de la table 'incidents' dans PostgreSQL"""
     __tablename__ = "incidents"
 
-    id = Column(String, primary_key=True, index=True) # Ex: INC-2026-001
+    id = Column(String, primary_key=True, index=True)
+    incident_type = Column(String, nullable=False)
+    severity = Column(Integer, nullable=False)
+    confidence_score = Column(Integer, nullable=False) # Converti ou stocké tel quel
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     raw_log = Column(String, nullable=False)
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
     
-    # Données issues de la classification et de l'enrichissement
-    incident_type = Column(String, nullable=True)
-    severity = Column(Integer, nullable=True)
-    urgency = Column(String, nullable=True)
-    
-    # Stockage structuré sous forme de JSONB (Spécifique Postgres, ultra rapide)
-    iocs = Column(JSONB, default=[])
-    mitre_techniques = Column(JSONB, default=[])
-    kill_chain = Column(JSONB, default=[])
-    remediation = Column(JSONB, default={})
-    
-    # Notre fameux score métrique
-    confidence_score = Column(Float, nullable=True)
+    # Stockage JSONB natif pour PostgreSQL
+    mitre_techniques = Column(JSON, default=[])
+    remediation = Column(JSON, default={})
+    kill_chain = Column(JSON, default=[])
+    iocs = Column(JSON, default=[])

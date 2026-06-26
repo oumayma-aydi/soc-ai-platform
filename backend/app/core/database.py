@@ -1,17 +1,25 @@
-import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
+from app.config import get_settings
 
-# URL de connexion PostgreSQL (à adapter avec tes identifiants locaux ou variables d'environnement)
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/soc_ai_db")
+settings = get_settings()
 
-engine = create_engine(DATABASE_URL, echo=False)
+# On utilise POSTGRES_URL depuis config.py (qui lit ton .env)
+engine = create_engine(
+    settings.POSTGRES_URL,
+    echo=False,          # Mettre True si tu veux voir les requêtes SQL dans le terminal (debug)
+    pool_pre_ping=True   # Vérifie que la connexion est vivante avant chaque requête
+)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
 def get_db():
-    """Dependency pour injecter la session de BDD dans l'API FastAPI"""
+    """
+    Dependency FastAPI : injecte une session DB dans chaque route qui en a besoin.
+    Le 'finally' garantit que la session est toujours fermée même si une erreur survient.
+    """
     db = SessionLocal()
     try:
         yield db
