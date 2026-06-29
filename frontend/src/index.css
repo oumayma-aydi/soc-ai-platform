@@ -1,0 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --star-dark-green: #00664F;   /* Le vert foncé de la bannière et du bouton "Découvrir" */
+  --star-bright-green: #78BE20; /* Le vert pomme dynamique de l'étoile du logo */
+  --star-bg-light: #F4F7F6;     /* Gris/vert très clair pour le fond d'écran */
+}
+
+@layer base {
+  html, body { 
+    background-color: var(--star-bg-light); 
+    color: #1E293B;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+@layer components {
+  /* Cartes blanches premium style STAR assurances */
+  .card-star { 
+    @apply bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-200;
+  }
+
+  /* Badges de Sévérité Propres et Lumineux */
+  .badge-critical { @apply bg-red-50 text-red-700 border border-red-200 text-xs font-semibold px-2.5 py-1 rounded-md; }
+  .badge-high     { @apply bg-orange-50 text-orange-700 border border-orange-200 text-xs font-semibold px-2.5 py-1 rounded-md; }
+  .badge-medium   { @apply bg-yellow-50 text-yellow-800 border border-yellow-200 text-xs font-semibold px-2.5 py-1 rounded-md; }
+  .badge-low      { @apply bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold px-2.5 py-1 rounded-md; }
+
+  /* Boutons aux couleurs du site STAR */
+  .btn-star-primary { 
+    @apply bg-[#00664F] hover:bg-[#004D3C] text-white font-semibold px-5 py-2.5 rounded-xl shadow-sm transition-all duration-150 text-sm flex items-center gap-2; 
+  }
+  
+  .btn-star-accent { 
+    @apply bg-[#78BE20] hover:bg-[#639D1A] text-white font-semibold px-4 py-2 rounded-xl shadow-sm transition-all duration-150 text-xs; 
+  }
+}
