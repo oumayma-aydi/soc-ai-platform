@@ -7,7 +7,7 @@ settings = get_settings()
 # On utilise POSTGRES_URL depuis config.py (qui lit ton .env)
 engine = create_engine(
     settings.POSTGRES_URL,
-    echo=False,          # Mettre True si tu veux voir les requêtes SQL dans le terminal (debug)
+    echo=True,          # Mettre True si tu veux voir les requêtes SQL dans le terminal (debug)
     pool_pre_ping=True   # Vérifie que la connexion est vivante avant chaque requête
 )
 

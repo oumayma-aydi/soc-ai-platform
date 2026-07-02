@@ -23,4 +23,13 @@ app.add_middleware(
 
 app.include_router(health.router, prefix="/api", tags=["Sante Cluster"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentification"])
-app.include_router(incidents.router, prefix="/api/incidents", tags=["Incidents"])
+app.include_router(incidents.router, prefix="/api", tags=["Incidents"])
+
+
+# Tout en bas de app/main.py
+@app.on_event("startup")
+def print_all_routes():
+    print("=== ROUTES DISPONIBLES SUR MON FASTAPI ===")
+    for route in app.routes:
+        print(f"[{route.methods}] -> http://localhost:8000{route.path}")
+    print("==========================================")

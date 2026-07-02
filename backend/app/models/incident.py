@@ -61,6 +61,16 @@ class Incident(BaseModel):
     
     remediation: Optional[Dict[str, Any]] = Field(None, description="Bloc remédiation complet")
     confidence_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Score de confiance déterministe")
+    
+    remediation: Optional[Dict[str, Any]] = Field(None, description="Bloc remédiation complet")
+    confidence_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Score de confiance déterministe")
+    
+    # --- PROPRIÉTÉS GÉOGRAPHIQUES POUR LA LIVE MAP ---
+    source_ip: Optional[str] = Field(None, description="IP principale externe identifiée à l'origine de l'attaque")
+    geo_data: Optional[Dict[str, Any]] = Field(
+        default_factory=lambda: {"country_code": "US", "country_name": "Unknown", "cx": 100, "cy": 160},
+        description="Coordonnées de mapping X/Y et pays calculés pour le composant SVG"
+    )
 
     # ==========================================
     # 3. VALIDATEURS PERSONNALISÉS (Business Logic)

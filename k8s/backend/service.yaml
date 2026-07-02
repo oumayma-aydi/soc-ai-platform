@@ -4,9 +4,10 @@ metadata:
   name: backend
   namespace: soc-platform
 spec:
-  selector:
-    app: backend
+  type: LoadBalancer # <-- REQUIS pour minikube tunnel
   ports:
     - port: 8000
       targetPort: 8000
-  type: ClusterIP
+      protocol: TCP
+  selector:
+    app: backend

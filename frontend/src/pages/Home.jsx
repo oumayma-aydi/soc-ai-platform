@@ -1,28 +1,52 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { 
-  Shield, Database, Activity, CheckCircle, 
-  ArrowRight, Radio, AlertTriangle, Info, Globe2 
+import {
+  Shield, Database, Activity, CheckCircle,
+  ArrowRight, Radio, Info, Globe2
 } from "lucide-react";
+import { geoMercator, geoPath } from "d3-geo";
+import { feature } from "topojson-client";
 import apiClient from "../api/client";
+import { getSeverityTier } from "../utils/severity";
+
+// Topojson public, léger (~100 pays simplifiés) — pas de clé API requise
+const GEO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
+
+const MAP_WIDTH = 640;
+const MAP_HEIGHT = 340;
+const PROJECTION_CONFIG = { scale: 115, center: [10, 18] };
+
+const STAR_HQ = { lon: 10.18, lat: 36.83, label: "Tunis — STAR HQ" };
 
 export default function Home() {
   const navigate = useNavigate();
   const [threats, setThreats] = useState([]);
   const [stats, setStats] = useState({ total_db: 0, critical_count: 0 });
+  const [countries, setCountries] = useState([]);
 
-  // 1. POLLING SÉCURISÉ DE L'API POUR LE TEMPS RÉEL (Option A)
+  // Chargement du fond de carte une seule fois (topojson → geojson)
+  useEffect(() => {
+    let cancelled = false;
+    fetch(GEO_URL)
+      .then((res) => res.json())
+      .then((topology) => {
+        if (cancelled) return;
+        const geojson = feature(topology, topology.objects.countries);
+        setCountries(geojson.features);
+      })
+      .catch((err) => console.error("Échec du chargement du fond de carte", err));
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     const fetchLiveThreats = async () => {
       try {
         const response = await apiClient.get("/api/incidents/live-threats");
         const data = response.data || [];
         setThreats(data);
-        
-        // Simulation dynamique des compteurs basée sur la réalité de la DB
         setStats({
-          total_db: data.length * 3, // Exemple de proportionnalité ou remplaçable par un endpoint de compteurs globaux
-          critical_count: data.filter(t => t.severity >= 8).length
+          total_db: data.length * 3, // À remplacer par un endpoint de comptage global dédié
+          critical_count: data.filter((t) => t.severity >= 8).length,
         });
       } catch (error) {
         console.error("Échec de la récupération des données en direct", error);
@@ -30,46 +54,52 @@ export default function Home() {
     };
 
     fetchLiveThreats();
-    const interval = setInterval(fetchLiveThreats, 5000); // Mise à jour automatique toutes les 5 secondes
+    const interval = setInterval(fetchLiveThreats, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  // Définition de la cible fixe : Tunis (STAR HQ)
-  const TARGET_TN = { cx: 430, cy: 270, label: "Tunis — STAR HQ" };
+  // Projection + générateur de tracé — mémorisés, réutilisés pour les pays ET les arcs
+  const projection = useMemo(
+    () =>
+      geoMercator()
+        .scale(PROJECTION_CONFIG.scale)
+        .center(PROJECTION_CONFIG.center)
+        .translate([MAP_WIDTH / 2, MAP_HEIGHT / 2]),
+    []
+  );
 
-  // Calcul dynamique de la trajectoire incurvée SVG pour chaque attaque réelle
-  const calculateArcPath = (sourceX, sourceY, targetX, targetY) => {
-    const mx = (sourceX + targetX) / 2;
-    const my = Math.min(sourceY, targetY) - 60; // Hauteur de l'arc de courbe
-    return `M ${sourceX} ${sourceY} Q ${mx} ${my} ${targetX} ${targetY}`;
-  };
+  const pathGenerator = useMemo(() => geoPath().projection(projection), [projection]);
 
-  const getSeverityStyle = (severity) => {
-    if (severity >= 8) return { bg: "bg-red-50", text: "text-red-600", border: "border-red-100", stroke: "#EF4444" };
-    if (severity >= 5) return { bg: "bg-orange-50", text: "text-orange-600", border: "border-orange-100", stroke: "#F97316" };
-    return { bg: "bg-blue-50", text: "text-blue-600", border: "border-blue-100", stroke: "#3B82F6" };
+  const targetPoint = projection([STAR_HQ.lon, STAR_HQ.lat]);
+
+  const calculateArcPath = (sx, sy, tx, ty) => {
+    const mx = (sx + tx) / 2;
+    const my = Math.min(sy, ty) - 50;
+    return `M ${sx} ${sy} Q ${mx} ${my} ${tx} ${ty}`;
   };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans antialiased pb-12">
-      
-      {/* HERO BANNER INSTITUTIONNEL STAR */}
+
+      {/* BANNIÈRE INSTITUTIONNELLE */}
       <div className="bg-white border-b border-slate-200 mb-8">
         <div className="max-w-7xl mx-auto px-8 py-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div className="space-y-2.5">
-            <span className="inline-block text-[10px] font-black tracking-widest text-[#78BE20] uppercase bg-[#78BE20]/10 border border-[#78BE20]/20 px-3 py-1 rounded-full">
-              Expertise Multidisciplinaire
+            <span className="inline-block text-[10px] font-black tracking-widest text-[#00664F] uppercase bg-[#00664F]/[0.05] border border-[#00664F]/20 px-3 py-1 rounded-full">
+              Supervision Augmentée par IA
             </span>
             <h1 className="text-2xl md:text-3xl font-black text-[#00664F] tracking-tight leading-tight">
-              STAR Assurances <span className="text-slate-300 font-light">|</span> <span className="text-slate-700 font-semibold">Cyber SOC Platform</span>
+              STAR Assurances <span className="text-slate-300 font-light">|</span>{" "}
+              <span className="text-slate-700 font-semibold">Cyber SOC Platform</span>
             </h1>
             <p className="text-sm text-slate-500 max-w-xl leading-relaxed">
-              Supervision et analyse d'incidents cyber augmentées par intelligence artificielle multi-agents — protection des données sinistres, contrats et clients.
+              Supervision et analyse d'incidents cyber augmentées par intelligence artificielle
+              multi-agents — protection des données sinistres, contrats et clients.
             </p>
           </div>
           <button
             onClick={() => navigate("/analyze")}
-            className="shrink-0 bg-[#00664F] hover:bg-[#004D3C] text-white font-bold text-xs tracking-wider uppercase py-3.5 px-6 rounded-xl transition-all flex items-center gap-3 group shadow-sm"
+            className="shrink-0 bg-[#00664F] hover:bg-[#004D3C] text-white font-bold text-xs tracking-wider uppercase py-3.5 px-6 rounded-xl transition-colors flex items-center gap-3 group shadow-sm"
           >
             Démarrer une analyse IA
             <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
@@ -78,8 +108,8 @@ export default function Home() {
       </div>
 
       <div className="max-w-7xl mx-auto px-8 space-y-8">
-        
-        {/* KPI STATS DYNAMIQUES */}
+
+        {/* KPI */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           <div className="bg-white border border-slate-200 rounded-2xl p-5 flex items-center gap-4 shadow-sm">
             <div className="p-3 bg-slate-100 rounded-xl border border-slate-100 flex-shrink-0 text-slate-500">
@@ -92,7 +122,7 @@ export default function Home() {
           </div>
 
           <div className="bg-white border border-slate-200 rounded-2xl p-5 flex items-center gap-4 shadow-sm">
-            <div className="p-3 bg-red-50 rounded-xl border border-slate-100 flex-shrink-0 text-red-500">
+            <div className="p-3 bg-[#991B1B]/[0.06] rounded-xl border border-slate-100 flex-shrink-0 text-[#991B1B]">
               <Shield size={20} />
             </div>
             <div>
@@ -102,7 +132,7 @@ export default function Home() {
           </div>
 
           <div className="bg-white border border-slate-200 rounded-2xl p-5 flex items-center gap-4 shadow-sm">
-            <div className="p-3 bg-emerald-50 rounded-xl border border-slate-100 flex-shrink-0 text-[#00664F]">
+            <div className="p-3 bg-[#00664F]/[0.06] rounded-xl border border-slate-100 flex-shrink-0 text-[#00664F]">
               <Activity size={20} />
             </div>
             <div>
@@ -112,116 +142,149 @@ export default function Home() {
           </div>
 
           <div className="bg-white border border-slate-200 rounded-2xl p-5 flex items-center gap-4 shadow-sm">
-            <div className="p-3 bg-[#78BE20]/10 rounded-xl border border-slate-100 flex-shrink-0 text-[#78BE20]">
+            <div className="p-3 bg-[#00664F]/[0.06] rounded-xl border border-slate-100 flex-shrink-0 text-[#00664F]">
               <CheckCircle size={20} />
             </div>
             <div>
-              <span className="text-xl font-black block font-mono text-[#78BE20] leading-tight">Actif</span>
+              <span className="text-xl font-black block font-mono text-[#00664F] leading-tight">Actif</span>
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mt-0.5">Pipeline d'ingestion IA</span>
             </div>
           </div>
         </div>
 
-        {/* SECTION CARTE ET FLUX D'ACTIVITÉS EN CLAIR */}
+        {/* CARTE ET FLUX D'ACTIVITÉS */}
         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-          
+
           <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/60 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <Radio size={14} className="text-red-500 animate-pulse" />
+              <Radio size={14} className="text-[#991B1B] animate-pulse" />
               <div>
                 <h2 className="text-xs font-black uppercase tracking-widest text-slate-800">Live Cyber Threat Map</h2>
-                <p className="text-[10px] text-slate-400 mt-0.5">Flux réel basé sur l'analyse de géolocalisation de vos logs d'infrastructure</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Flux réel basé sur l'analyse de géolocalisation de vos logs d'infrastructure
+                </p>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 bg-red-50 border border-red-100 text-red-600 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+            <div className="flex items-center gap-1.5 bg-[#991B1B]/[0.06] border border-[#991B1B]/20 text-[#991B1B] text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#991B1B] animate-pulse"></span>
               En direct
             </div>
           </div>
 
           <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* CARTE SVG AVEC VECTEURS D'ATTAQUES DYNAMIQUES */}
+
+            {/* CARTE */}
             <div className="lg:col-span-2">
-              <div className="relative w-full bg-slate-50 border border-slate-200 rounded-xl overflow-hidden" style={{ height: 340 }}>
-                
-                {/* Grille technique de fond */}
-                <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.04 }}>
-                  <defs>
-                    <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
-                      <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#000" strokeWidth="0.5"/>
-                    </pattern>
-                  </defs>
-                  <rect width="100%" height="100%" fill="url(#grid)" />
-                </svg>
+              <div className="relative w-full bg-white border border-slate-200 rounded-xl overflow-hidden" style={{ height: 340 }}>
 
-                {/* Rendu des vecteurs */}
-                <svg viewBox="0 0 640 340" className="absolute inset-0 w-full h-full">
-                  <defs>
-                    {threats.map((t, i) => (
-                      <path key={`path-def-${i}`} id={`arc-path-${i}`} d={calculateArcPath(t.cx, t.cy, TARGET_TN.cx, TARGET_TN.cy)} fill="none" />
+                <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="absolute inset-0 w-full h-full">
+                  {/* FOND DE CARTE — tracé directement via d3-geo, sans dépendance React */}
+                  <g>
+                    {countries.map((c, i) => (
+                      <path
+                        key={`country-${i}`}
+                        d={pathGenerator(c)}
+                        fill="#F1F5F9"
+                        stroke="#E2E8F0"
+                        strokeWidth={0.6}
+                      />
                     ))}
+                  </g>
+
+                  {/* ARCS DE MENACE */}
+                  <defs>
+                    {threats.map((t, i) => {
+                      if (t.lat == null || t.lon == null) return null;
+                      const p = projection([t.lon, t.lat]);
+                      if (!p) return null;
+                      return (
+                        <path
+                          key={`path-def-${i}`}
+                          id={`arc-path-${i}`}
+                          d={calculateArcPath(p[0], p[1], targetPoint[0], targetPoint[1])}
+                          fill="none"
+                        />
+                      );
+                    })}
                   </defs>
 
-                  {/* Tracés et animations des flux de menaces de la DB */}
                   {threats.map((t, i) => {
-                    const style = getSeverityStyle(t.severity);
+                    if (t.lat == null || t.lon == null) return null;
+                    const p = projection([t.lon, t.lat]);
+                    if (!p) return null;
+                    const tier = getSeverityTier(t.severity);
                     return (
                       <g key={`threat-vector-${i}`}>
-                        {/* Ligne courbe fine */}
-                        <path d={calculateArcPath(t.cx, t.cy, TARGET_TN.cx, TARGET_TN.cy)} fill="none" stroke={style.stroke} strokeWidth="1" strokeOpacity="0.2" />
-                        
-                        {/* Bulle d'impact animée */}
-                        <circle r="3.5" fill={style.stroke} opacity="0.85">
-                          <animateMotion dur={`${3 + i}s`} repeatCount="indefinite" rotate="auto">
+                        <path
+                          d={calculateArcPath(p[0], p[1], targetPoint[0], targetPoint[1])}
+                          fill="none"
+                          stroke={tier.hex}
+                          strokeWidth="1.2"
+                          strokeOpacity="0.35"
+                        />
+                        <circle r="3.5" fill={tier.hex} opacity="0.9">
+                          <animateMotion dur={`${2.5 + i}s`} repeatCount="indefinite" rotate="auto">
                             <mpath href={`#arc-path-${i}`} />
                           </animateMotion>
                         </circle>
-
-                        {/* Point d'ancrage source du pays attaquant */}
-                        <circle cx={t.cx} cy={t.cy} r="4" fill={style.stroke} opacity="0.7" />
-                        <text x={t.cx} y={t.cy - 10} textAnchor="middle" fontSize="9" fontFamily="monospace" fill="#64748B" fontWeight="600">
+                        <circle cx={p[0]} cy={p[1]} r="4" fill={tier.hex} opacity="0.85" />
+                        <text
+                          x={p[0]}
+                          y={p[1] - 10}
+                          textAnchor="middle"
+                          fontSize="9"
+                          fontFamily="Inter, sans-serif"
+                          fill="#475569"
+                          fontWeight="600"
+                        >
                           {t.country_name}
                         </text>
                       </g>
                     );
                   })}
 
-                  {/* Cible centrale : Tunis (STAR HQ) */}
                   <g>
-                    <circle cx={TARGET_TN.cx} cy={TARGET_TN.cy} r="20" fill="#00664F" opacity="0.06" />
-                    <circle cx={TARGET_TN.cx} cy={TARGET_TN.cy} r="7"  fill="#00664F" />
-                    <circle cx={TARGET_TN.cx} cy={TARGET_TN.cy} r="2.5" fill="white" />
-                    <text x={TARGET_TN.cx} y={TARGET_TN.cy + 28} textAnchor="middle" fontSize="10" fill="#00664F" fontWeight="800">
-                      {TARGET_TN.label}
+                    <circle cx={targetPoint[0]} cy={targetPoint[1]} r="20" fill="#00664F" opacity="0.06" />
+                    <circle cx={targetPoint[0]} cy={targetPoint[1]} r="7" fill="#00664F" />
+                    <circle cx={targetPoint[0]} cy={targetPoint[1]} r="2.5" fill="white" />
+                    <text
+                      x={targetPoint[0]}
+                      y={targetPoint[1] + 28}
+                      textAnchor="middle"
+                      fontSize="10"
+                      fill="#00664F"
+                      fontWeight="800"
+                    >
+                      {STAR_HQ.label}
                     </text>
                   </g>
                 </svg>
 
-                {/* Badges indicatifs fixes */}
                 <div className="absolute bottom-3 left-3 bg-white border border-slate-200 rounded-lg px-3 py-1.5 flex items-center gap-2 shadow-sm">
                   <Globe2 size={11} className="text-slate-400" />
-                  <span className="text-[10px] font-bold text-slate-500 font-mono uppercase tracking-wider">Supervision active · UTC+1</span>
+                  <span className="text-[10px] font-bold text-slate-500 font-mono uppercase tracking-wider">
+                    Supervision active · UTC+1
+                  </span>
                 </div>
               </div>
             </div>
 
-            {/* VOLET DROIT : COMPOSANT DE FLUX DES ALERTES REELLES */}
+            {/* FLUX DES ALERTES */}
             <div className="flex flex-col border border-slate-200 rounded-xl bg-slate-50/40 overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-200 bg-white">
                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Flux d'activités récentes</span>
               </div>
-              
+
               <div className="flex-1 p-3 space-y-2 overflow-y-auto max-h-[275px]">
                 {threats.length === 0 ? (
                   <div className="text-center py-12 text-xs font-medium text-slate-400">Aucune menace active enregistrée.</div>
                 ) : (
                   threats.map((t, i) => {
-                    const style = getSeverityStyle(t.severity);
+                    const tier = getSeverityTier(t.severity);
                     return (
                       <div key={i} className="bg-white border border-slate-100 rounded-xl p-3 shadow-sm space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <span className={`inline-flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded border ${style.bg} ${style.text} ${style.border} uppercase tracking-wider`}>
+                          <span className={`inline-flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded border ${tier.bg} ${tier.text} ${tier.border} uppercase tracking-wider`}>
                             <Info size={10} /> SÉVÉRITÉ {t.severity}
                           </span>
                           <span className="text-[9px] font-mono text-slate-400">
@@ -253,9 +316,7 @@ export default function Home() {
             </div>
 
           </div>
-
         </div>
-
       </div>
     </div>
   );

@@ -88,7 +88,7 @@ def load_d3fend():
         if isinstance(definition, list):
             definition = " ".join(
                 str(x) for x in definition
-            )
+            ) 
 
         if definition is not None and not isinstance(definition, str):
             definition = str(definition)

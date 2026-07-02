@@ -38,12 +38,15 @@ class IncidentORM(Base):
     id = Column(String, primary_key=True, index=True)
     incident_type = Column(String, nullable=False)
     severity = Column(Integer, nullable=False)
-    confidence_score = Column(Integer, nullable=False) # Converti ou stocké tel quel
+    confidence_score = Column(Integer, nullable=False)
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     raw_log = Column(String, nullable=False)
     
-    # Stockage JSONB natif pour PostgreSQL
     mitre_techniques = Column(JSON, default=[])
-    remediation = Column(JSON, default={})
+    remediation = Column(JSON, default={}) # aligné sur ton backend
     kill_chain = Column(JSON, default=[])
     iocs = Column(JSON, default=[])
+    
+    # --- NOUVELLES COLONNES POUR L'ENRICHISSEMENT GÉO ---
+    source_ip = Column(String, nullable=True)
+    geo_data = Column(JSON, default={})
