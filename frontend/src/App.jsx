@@ -5,22 +5,42 @@ import Dashboard from "./pages/Dashboard";
 import Analysis from "./pages/Analysis";
 import Report from "./pages/Report";
 import Login from "./pages/Login";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import UserManagement from "./pages/UserManagement";
 
-// Layout Privé Sécurisé - Fond clair institutionnel
-function PrivateLayout({ children }) {
+function isTokenValid(token) {
+  if (!token) return false;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    if (!payload.exp) return true;
+    return Date.now() < payload.exp * 1000;
+  } catch {
+    return false;
+  }
+}
+
+// Layout Privé Sécurisé — vérifie la présence ET la validité du token,
+// et optionnellement restreint l'accès à une liste de rôles autorisés.
+function PrivateLayout({ children, allowedRoles }) {
   const token = localStorage.getItem("access_token");
-  
-  // Si pas de token, redirection immédiate vers la page de Login
-  if (!token) return <Navigate to="/login" replace />;
+  const role = localStorage.getItem("user_role");
+
+  if (!isTokenValid(token)) {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    localStorage.removeItem("user_role");
+    return <Navigate to="/login" replace />;
+  }
+
+  if (allowedRoles && !allowedRoles.includes(role)) {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <div className="flex h-screen bg-[#F4F7F6]">
-      {/* Barre latérale officielle STAR */}
       <Sidebar />
-      {/* Zone d'affichage des dashboards dynamiques */}
-      <main className="flex-1 overflow-y-auto p-6">
-        {children}
-      </main>
+      <main className="flex-1 overflow-y-auto p-6">{children}</main>
     </div>
   );
 }
@@ -28,16 +48,21 @@ function PrivateLayout({ children }) {
 export default function App() {
   return (
     <Routes>
-      {/* Route Publique */}
+      {/* Routes publiques */}
       <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
 
-      {/* Routes Protégées par le Layout Cyber */}
+      {/* Routes protégées */}
       <Route path="/" element={<PrivateLayout><Home /></PrivateLayout>} />
       <Route path="/dashboard" element={<PrivateLayout><Dashboard /></PrivateLayout>} />
       <Route path="/analysis" element={<PrivateLayout><Analysis /></PrivateLayout>} />
       <Route path="/report/:id" element={<PrivateLayout><Report /></PrivateLayout>} />
+      <Route
+        path="/admin/users"
+        element={<PrivateLayout allowedRoles={["admin"]}><UserManagement /></PrivateLayout>}
+      />
 
-      {/* Redirection automatique si la route n'existe pas */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

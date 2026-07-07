@@ -16,7 +16,10 @@ class UserORM(Base):
     # Politique de sécurité
     failed_login_attempts = Column(Integer, default=0)
     password_updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-
+    
+    reset_token_hash = Column(String, nullable=True)
+    reset_token_expires_at = Column(DateTime, nullable=True)
+    
     # Relation avec l'historique
     password_history = relationship("UserPasswordHistoryORM", back_populates="user", cascade="all, delete-orphan")
 
@@ -50,3 +53,17 @@ class IncidentORM(Base):
     # --- NOUVELLES COLONNES POUR L'ENRICHISSEMENT GÉO ---
     source_ip = Column(String, nullable=True)
     geo_data = Column(JSON, default={})
+
+class PasswordResetRequestORM(Base):
+    """Demande de réinitialisation pour un compte analyst/auditor,
+    à traiter manuellement par un admin."""
+    __tablename__ = "password_reset_requests"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    requested_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    resolved = Column(Integer, default=0)  # 0 = en attente, 1 = traité
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_by = Column(String, nullable=True)  # username de l'admin qui a traité
+
+    user = relationship("UserORM")

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate , Link} from "react-router-dom";
 import { Shield, KeyRound, User, Loader2 } from "lucide-react";
-import apiClient from "../api/client"; // Assure-toi que le chemin est correct
+import apiClient from "../api/client";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -16,32 +16,20 @@ export default function Login() {
     setLoading(true);
 
     try {
-      // Envoi de la requête POST au backend (exactement comme ton curl)
-      const response = await apiClient.post("/api/auth/login", {
-        username: username,
-        password: password,
-      });
+      const response = await apiClient.post("/api/auth/login", { username, password });
+      const { access_token, refresh_token, role } = response.data;
 
-      // On récupère le token renvoyé par ton API Django/FastAPI
-      // Adapte 'response.data.access_token' ou 'response.data.token' selon ce que ton API renvoie
-      const token = response.data.access_token || response.data.token;
-
-      if (token) {
-        localStorage.setItem("access_token", token);
-        localStorage.setItem("user_role", "Administrateur SOC");
-        
-        // Redirection vers le tableau de bord
+      if (access_token) {
+        localStorage.setItem("access_token", access_token);
+        if (refresh_token) localStorage.setItem("refresh_token", refresh_token);
+        localStorage.setItem("user_role", role || "analyst"); // rôle réel renvoyé par le backend
         navigate("/");
       } else {
         setError("Le serveur n'a pas renvoyé de jeton (token) d'authentification.");
       }
     } catch (err) {
       console.error(err);
-      if (err.response && err.response.data && err.response.data.detail) {
-        setError(err.response.data.detail);
-      } else {
-        setError("Impossible de contacter le serveur d'authentification (Erreur backend).");
-      }
+      setError(err.response?.data?.detail || "Impossible de contacter le serveur d'authentification.");
     } finally {
       setLoading(false);
     }
@@ -53,19 +41,17 @@ export default function Login() {
 
       <div className="bg-white w-full max-w-md rounded-b-2xl shadow-xl border border-slate-200/60 p-8 space-y-6">
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center text-4xl text-[#78BE20] font-bold select-none">
+          <div className="inline-flex items-center justify-center text-4xl text-[#00664F] font-bold select-none">
             ★
           </div>
-          <h1 className="text-xl font-black text-[#00664F] tracking-tight">
-            STAR ASSURANCES
-          </h1>
+          <h1 className="text-xl font-black text-[#00664F] tracking-tight">STAR ASSURANCES</h1>
           <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">
             Contrôle d'Accès · Plateforme SOC AI
           </p>
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-xs font-semibold p-3 rounded-xl text-center">
+          <div className="bg-[#991B1B]/[0.05] border border-[#991B1B]/20 text-[#991B1B] text-xs font-semibold p-3 rounded-xl text-center">
             {error}
           </div>
         )}
@@ -73,7 +59,7 @@ export default function Login() {
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">
-              Identifiant de l'analyste
+              Identifiant
             </label>
             <div className="relative">
               <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
@@ -83,7 +69,7 @@ export default function Login() {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Ex: admin"
+                placeholder="Identifiant STAR"
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#00664F]/20 focus:border-[#00664F] transition-all"
                 disabled={loading}
                 required
@@ -116,15 +102,16 @@ export default function Login() {
             disabled={loading}
             className="w-full bg-[#00664F] hover:bg-[#004D3C] disabled:bg-slate-400 text-white font-bold text-sm py-3 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 mt-2"
           >
-            {loading ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : (
-              <Shield size={16} />
-            )}
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <Shield size={16} />}
             {loading ? "Vérification..." : "S'authentifier sur le portail"}
           </button>
-        </form>
 
+          <Link to="/forgot-password" className="block text-center text-xs font-semibold text-[#00664F] hover:text-[#004D3C]">
+            Mot de passe oublié ?
+          </Link>
+
+        </form>
+        
         <div className="text-center pt-2 border-t border-slate-100">
           <p className="text-[10px] text-slate-400 font-medium">
             Usage strictement réservé au personnel autorisé de la STAR Assurances.
