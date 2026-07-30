@@ -21,10 +21,26 @@ export default function Report() {
     },
   });
 
-  const handleDownloadPDF = () => {
-    const token = localStorage.getItem("access_token");
-    window.open(`http://localhost:8000/api/incidents/${id}/export-pdf?token=${token}`, "_blank");
-  };
+  const handleDownloadPDF = async () => {
+  try {
+    const response = await apiClient.get(`/api/incidents/${id}/export-pdf`, {
+      responseType: "blob",
+    });
+
+    const blobUrl = window.URL.createObjectURL(
+      new Blob([response.data], { type: "application/pdf" })
+    );
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.setAttribute("download", `rapport_SOC_${id}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    console.error("Erreur lors du téléchargement du PDF:", err);
+  }
+};
 
   if (isLoading) {
     return <div className="text-center py-12 font-mono text-xs text-slate-500">Extraction et décodage du rapport d'incident...</div>;
@@ -59,7 +75,14 @@ export default function Report() {
   const remediationData = safeParse(data.remediation) || {};
   const actions = Array.isArray(remediationData.actions) ? remediationData.actions : [];
   const detections = Array.isArray(remediationData.detections_to_deploy) ? remediationData.detections_to_deploy : [];
-  const summaryText = remediationData.summary || data.summary || `Anomalie de type "${data.incident_type || "Inconnu"}" détectée par le SOC.`;
+  const summaryRaw = remediationData.summary;
+const summaryText = typeof summaryRaw === "string"
+  ? summaryRaw
+  : summaryRaw?.overall_assessment || data.summary || `Anomalie de type "${data.incident_type || "Inconnu"}" détectée par le SOC.`;
+const summaryConfirmed = Array.isArray(summaryRaw?.confirmed) ? summaryRaw.confirmed : [];
+const summaryLikely = Array.isArray(summaryRaw?.likely) ? summaryRaw.likely : [];
+const summaryNotConfirmed = Array.isArray(summaryRaw?.not_confirmed) ? summaryRaw.not_confirmed : [];
+const ragSources = Array.isArray(remediationData.rag_sources_consulted) ? remediationData.rag_sources_consulted : [];
 
   const killChainRaw = safeParse(data.kill_chain);
   const killChain = Array.isArray(killChainRaw) ? killChainRaw : [];
@@ -70,7 +93,9 @@ export default function Report() {
   const iocs = Array.isArray(iocsRaw) ? iocsRaw : [];
 
   const severity = data.severity || 5;
-  const confidence = data.confidence_score ? (data.confidence_score * 100).toFixed(0) : "100";
+  const confidence = (data.confidence_score !== null && data.confidence_score !== undefined)
+  ? (data.confidence_score * 100).toFixed(0)
+  : "N/A";
   const tier = getSeverityTier(severity);
 
   return (
@@ -124,11 +149,52 @@ export default function Report() {
       </div>
 
       {/* RÉSUMÉ EXÉCUTIF */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-2">
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-3">
         <h3 className="text-slate-800 text-xs font-bold uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-2">
           <FileText size={14} className="text-[#00664F]" /> Synthèse de l'Analyse d'Incident
         </h3>
         <p className="text-slate-600 text-xs leading-relaxed font-medium">{summaryText}</p>
+
+        {(summaryConfirmed.length > 0 || summaryLikely.length > 0 || summaryNotConfirmed.length > 0) && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            {summaryConfirmed.length > 0 && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                <span className="flex items-center gap-1 text-[10px] font-black text-emerald-700 uppercase tracking-wider mb-1.5">
+                  <CheckCircle2 size={12} /> Confirmé
+                </span>
+                <ul className="space-y-1">
+                  {summaryConfirmed.map((c, i) => (
+                    <li key={i} className="text-[11px] text-emerald-800 font-medium">{c}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {summaryLikely.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                <span className="flex items-center gap-1 text-[10px] font-black text-amber-700 uppercase tracking-wider mb-1.5">
+                  <AlertCircle size={12} /> Probable
+                </span>
+                <ul className="space-y-1">
+                  {summaryLikely.map((c, i) => (
+                    <li key={i} className="text-[11px] text-amber-800 font-medium">{c}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {summaryNotConfirmed.length > 0 && (
+              <div className="bg-slate-100 border border-slate-200 rounded-xl p-3">
+                <span className="flex items-center gap-1 text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">
+                  <Eye size={12} /> Non confirmé
+                </span>
+                <ul className="space-y-1">
+                  {summaryNotConfirmed.map((c, i) => (
+                    <li key={i} className="text-[11px] text-slate-600 font-medium">{c}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* GRILLE */}
@@ -173,6 +239,18 @@ export default function Report() {
                         </ul>
                       </div>
                     )}
+                    {tech?.description && (
+                      <p className="text-slate-500 text-[11px] font-medium mt-2 leading-relaxed italic">
+                        {tech.description}
+                      </p>
+                    )}
+
+                    {tech?.detection_recommendation && (
+                      <div className="mt-2 pt-2 border-t border-dashed border-slate-200/60">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Détection recommandée :</span>
+                        <p className="text-slate-600 text-[11px] font-medium">{tech.detection_recommendation}</p>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -189,28 +267,111 @@ export default function Report() {
             {actions.length === 0 ? (
               <p className="text-xs text-slate-400 font-medium">Aucun plan d'action immédiat généré.</p>
             ) : (
-              <div className="relative border-l border-slate-200 pl-4 ml-2 space-y-6">
+              <div className="space-y-3">
                 {actions.map((act, index) => {
-                  const dot =
-                    act?.priority === 1 ? "bg-[#991B1B]" : act?.priority === 2 ? "bg-[#C2410C]" : "bg-[#1E3A8A]";
+                  const priorityStyles = {
+                    1: { badge: "bg-[#991B1B]/[0.08] text-[#991B1B] border-[#991B1B]/20", bar: "bg-[#991B1B]" },
+                    2: { badge: "bg-[#C2410C]/[0.08] text-[#C2410C] border-[#C2410C]/20", bar: "bg-[#C2410C]" },
+                    3: { badge: "bg-[#1E3A8A]/[0.08] text-[#1E3A8A] border-[#1E3A8A]/20", bar: "bg-[#1E3A8A]" },
+                  };
+                  const priorityNum = index + 1;
+                  const pStyle = priorityStyles[priorityNum] || priorityStyles[3];
+
+                  const confidenceStyles = {
+                    High: "text-emerald-700 bg-emerald-50 border-emerald-200",
+                    Medium: "text-amber-700 bg-amber-50 border-amber-200",
+                    Low: "text-slate-500 bg-slate-50 border-slate-200",
+                  };
+                  const confStyle = confidenceStyles[act?.confidence] || confidenceStyles.Medium;
+
                   return (
-                    <div key={index} className="relative">
-                      <span className={`absolute -left-[22px] top-0.5 flex h-3 w-3 items-center justify-center rounded-full ring-4 ring-white ${dot}`} />
-                      <div className="space-y-1">
+                    <div key={index} className="relative border border-slate-100 rounded-xl p-4 bg-slate-50/50 overflow-hidden">
+                      <span className={`absolute left-0 top-0 bottom-0 w-1 ${pStyle.bar}`} />
+                      <div className="pl-2 space-y-2.5">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-bold text-slate-800">{act?.action || "Action"}</span>
-                          <span className="flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded font-mono">
-                            <Clock size={10} /> {act?.timeframe || "N/A"}
+                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${pStyle.badge}`}>
+                            P{priorityNum}
                           </span>
-                          {act?.source && (
-                            <span className="text-[9px] font-bold text-[#00664F] bg-[#00664F]/[0.05] px-1.5 py-0.5 rounded border border-[#00664F]/15">
-                              {act.source}
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide bg-white px-2 py-0.5 border border-slate-200 rounded">
+                            {act?.phase || "Phase"}
+                          </span>
+                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${confStyle}`}>
+                            Confiance {act?.confidence || "N/A"}
+                          </span>
+                          {act?.necessity && (
+                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded border border-slate-200 bg-white text-slate-500">
+                              {act.necessity}
                             </span>
                           )}
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-1.5 py-0.5 rounded font-mono ml-auto">
+                            <Clock size={10} /> {act?.timeframe || "N/A"}
+                          </span>
                         </div>
-                        <p className="text-slate-500 text-[11px] font-medium leading-relaxed">
-                          <strong className="text-slate-600">Procédure :</strong> {act?.how || "Non renseignée"}
-                        </p>
+
+                        <h4 className="text-xs font-bold text-slate-800">{act?.action || "Action"}</h4>
+
+                        {act?.procedure?.why && (
+                          <p className="text-slate-500 text-[11px] font-medium leading-relaxed">
+                            <strong className="text-slate-600">Pourquoi : </strong>{act.procedure.why}
+                          </p>
+                        )}
+
+                        {act?.evidence && (
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Preuve</span>
+                            <p className="text-slate-600 font-mono text-[11px]">{act.evidence}</p>
+                          </div>
+                        )}
+
+                        {act?.procedure?.steps?.length > 0 && (
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Étapes</span>
+                            <ol className="list-decimal list-inside space-y-0.5">
+                              {act.procedure.steps.filter(Boolean).map((s, i) => (
+                                <li key={i} className="text-slate-600 text-[11px] font-medium">{s}</li>
+                              ))}
+                            </ol>
+                          </div>
+                        )}
+
+                        {act?.procedure?.commands?.some(c => c?.command) && (
+                          <div className="space-y-2">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Commandes</span>
+                            {act.procedure.commands.filter(c => c?.command).map((cmd, i) => (
+                              <div key={i} className="bg-slate-900 rounded-lg overflow-hidden">
+                                <div className="px-3 py-1 text-[9px] font-bold uppercase tracking-wider text-slate-400 bg-slate-800/60">
+                                  {cmd.title}
+                                </div>
+                                <pre className="px-3 py-2 text-[10px] font-mono text-emerald-300 overflow-x-auto whitespace-pre-wrap">{cmd.command}</pre>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {act?.business_impact && (() => {
+                          const noImpact = /^(none|no impact|n\/a|aucun)/i.test(act.business_impact.trim());
+                          return (
+                            <div className={`flex items-start gap-1.5 rounded-lg px-2.5 py-1.5 border ${
+                              noImpact ? "bg-slate-50 border-slate-200" : "bg-amber-50 border-amber-200"
+                            }`}>
+                              {noImpact
+                                ? <CheckCircle2 size={12} className="text-slate-400 mt-0.5 flex-shrink-0" />
+                                : <AlertCircle size={12} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                              }
+                              <p className={`text-[11px] font-medium ${noImpact ? "text-slate-500" : "text-amber-800"}`}>
+                                {act.business_impact}
+                              </p>
+                            </div>
+                          );
+                        })()}
+
+                        {act?.source && (
+                          <span className="inline-block text-[9px] font-bold text-[#00664F] bg-[#00664F]/[0.05] px-1.5 py-0.5 rounded border border-[#00664F]/15">
+                            {typeof act.source === "object"
+                              ? [act.source.framework, act.source.id, act.source.title].filter(Boolean).join(" · ")
+                              : act.source}
+                          </span>
+                        )}
                       </div>
                     </div>
                   );
@@ -219,20 +380,61 @@ export default function Report() {
             )}
 
             {detections.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Signatures SIEM conseillées</span>
-                <div className="flex flex-wrap gap-2">
+              <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
+                  Signatures SIEM conseillées
+                </span>
+                <div className="space-y-3">
                   {detections.map((det, idx) => (
-                    <span key={idx} className="bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-medium px-2.5 py-1 rounded-lg">
-                      {det}
-                    </span>
+                    <div key={idx} className="border border-slate-100 rounded-xl p-4 bg-slate-50/50 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold text-xs text-slate-800">{det?.title || "Règle de détection"}</h4>
+                        {det?.severity && (
+                          <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded border border-slate-200 bg-white text-slate-500">
+                            {det.severity}
+                </span>
+                        )}
+                      </div>
+                      {det?.objective && (
+                        <p className="text-[11px] text-slate-500 font-medium">{det.objective}</p>          
+                      )}
+                      {[
+                        { label: "Sigma", value: det?.sigma?.rule || det?.sigma },
+                        { label: "Splunk SPL", value: det?.splunk?.query || det?.splunk },
+                        { label: "Microsoft Sentinel KQL", value: det?.kql?.query || det?.kql },
+                      ].filter(q => q.value).map((q, i) => (
+                        <div key={i} className="bg-slate-900 rounded-lg overflow-hidden">
+                          <div className="px-3 py-1 text-[9px] font-bold uppercase tracking-wider text-slate-400 bg-slate-800/60">
+                            {q.label}
+                          </div>
+                          <pre className="px-3 py-2 text-[10px] font-mono text-emerald-300 overflow-x-auto whitespace-pre-wrap">{q.value}</pre>
+                        </div>
+                      ))}
+                    </div>
                   ))}
                 </div>
               </div>
             )}
+            {ragSources.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-slate-100">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">
+                  Base de connaissances consultée par l'IA
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {ragSources.map((s, i) => (
+                    <span
+                      key={i}
+                      title={`Pertinence : ${(s.relevance * 100).toFixed(0)}%`}
+                      className="text-[10px] font-bold text-slate-600 bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg"
+                    >
+                      <span className="text-[#00664F]">{s.framework}</span> — {s.title || "Sans titre"}
+                    </span>
+                  ))}
+    </div>
+  </div>
+)}
           </div>
         </div>
-
         {/* COLONNE DE DROITE */}
         <div className="space-y-6">
 
@@ -263,13 +465,27 @@ export default function Report() {
                 </div>
               </div>
             ) : (
-              <div className="space-y-2 font-mono text-[11px]">
+              <div className="space-y-3 font-mono text-[11px]">
                 {killChain.map((step, idx) => (
-                  <div key={idx} className="flex justify-between border-b border-slate-50 pb-1">
-                    <span className="text-slate-700 font-bold">{step?.phase || "Phase"}</span>
-                    <span className="text-[#00664F]">{step?.status || "Actif"}</span>
+                  <div key={idx} className="border-b border-slate-100 pb-2">
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-slate-700 font-bold">
+                       Étape {step?.step || idx + 1} — {step?.phase || "Phase"}
+                      </span>
+                      <span className="text-slate-400 text-[10px]">
+                       {step?.timestamp || ""}
+                      </span>
+                   </div>
+                    {step?.technique_id && (
+                      <span className="text-[#00664F] text-[10px] font-bold">{step.technique_id}</span>
+                    )}
+                    {step?.description && (
+                      <p className="text-slate-500 text-[10px] font-sans mt-1 leading-relaxed normal-case">
+                        {step.description}
+                      </p>
+                    )}
                   </div>
-                ))}
+               ))}
               </div>
             )}
           </div>

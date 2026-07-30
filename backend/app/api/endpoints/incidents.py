@@ -55,10 +55,17 @@ async def analyze_incident(
             ip_pattern = r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
             all_ips = re.findall(ip_pattern, payload.raw_log)
             public_ips = [ip for ip in all_ips if not ip.startswith(("127.", "192.168.", "10.", "172.16."))]
-            ip_detectee = public_ips[0] if public_ips else "185.220.101.47"
+            ip_detectee = public_ips[0] if public_ips else None
 
-        country_code = await get_country_from_ip(ip_detectee, iocs_data)
-        geo_info = get_geo_coordinates(country_code)
+        if ip_detectee:
+            country_code = await get_country_from_ip(ip_detectee, iocs_data)
+            geo_info = get_geo_coordinates(country_code)
+        else:
+            # Aucune IP dans ce log (ex: phishing par domaine seul) —
+            # pas de géolocalisation possible, on ne fabrique pas de fausse donnée.
+            country_code = None
+            geo_info = {"name": "Non géolocalisé", "lat": None, "lon": None}
+
 
         computed_geo_data = {
             "country_code": country_code,
@@ -107,7 +114,7 @@ def get_live_threats(db: Session = Depends(get_db)):
     directement par le frontend. Rétro-compatible avec les anciens
     incidents qui n'ont que cx/cy ou un country_code sans lat/lon.
     """
-    incidents = db.query(IncidentORM).order_by(IncidentORM.timestamp.desc()).limit(5).all()
+    incidents = db.query(IncidentORM).order_by(IncidentORM.timestamp.desc()).limit(15).all()
 
     results = []
     for inc in incidents:
@@ -125,10 +132,15 @@ def get_live_threats(db: Session = Depends(get_db)):
         country_name = geo.get("country_name")
 
         if lat is None or lon is None:
-            fallback = get_geo_coordinates(geo.get("country_code"))
-            lat = fallback["lat"]
-            lon = fallback["lon"]
-            country_name = country_name or fallback["name"]
+            if geo.get("country_code"):
+                fallback = get_geo_coordinates(geo.get("country_code"))
+                lat = fallback["lat"]
+                lon = fallback["lon"]
+                country_name = country_name or fallback["name"]
+            else:
+                # Incident sans IP détectable — on l'exclut de la carte plutôt
+                # que d'afficher une fausse position par défaut.
+                continue
 
         inc_type = inc.incident_type
         if inc_type and (inc_type.startswith("{") or inc_type.startswith("[")):

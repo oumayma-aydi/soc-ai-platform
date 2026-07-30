@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Server, ShieldAlert, CheckCircle, Database } from "lucide-react";
 import apiClient from "../api/client";
+import { getUrgencyLabel } from "../utils/severity";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -149,7 +150,9 @@ export default function Dashboard() {
                         {inc.severity || 0}/10
                       </span>
                     </td>
-                    <td className="py-3 px-3 text-xs font-mono font-bold uppercase text-slate-600">{inc.urgency || "Basse"}</td>
+                    <td className="py-3 px-3 text-xs font-mono font-bold uppercase text-slate-600">
+                      {getUrgencyLabel(inc.severity || 0)}
+                    </td>
                     <td className="py-3 px-3 text-right">
                       <button
                         onClick={() => navigate(`/report/${inc.id}`)}

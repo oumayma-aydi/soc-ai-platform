@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.core.database import Base
@@ -41,7 +41,7 @@ class IncidentORM(Base):
     id = Column(String, primary_key=True, index=True)
     incident_type = Column(String, nullable=False)
     severity = Column(Integer, nullable=False)
-    confidence_score = Column(Integer, nullable=False)
+    confidence_score = Column(Float, nullable=False)
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     raw_log = Column(String, nullable=False)
     

@@ -8,4 +8,4 @@ node_modules/
 dist/
 build/
 .DS_Store
-k8s/backend/secret.yaml
+k8s/backend/secret.yamlk8s/postgres/secret.yaml
