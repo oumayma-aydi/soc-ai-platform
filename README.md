@@ -354,17 +354,18 @@ npm run dev
 
 
 
-cd ~/projects/soc-ai-platform/backend
-python -c "
+```bash
+python -c '
 from app.core.database import SessionLocal
 from app.models.orm import UserORM
-from datetime import datetime, timezone
 
 db = SessionLocal()
-user = db.query(UserORM).filter(UserORM.username == 'admin').first()
-user.password_updated_at = datetime.now(timezone.utc)
-user.failed_login_attempts = 0
-db.commit()
-print('OK — password_updated_at remis à maintenant')
-db.close()
-"
+try:
+    users = db.query(UserORM).all()
+    for u in users:
+        print(u.username, "|", u.role, "| actif:", u.is_active,
+              "| password_updated_at:", u.password_updated_at)
+finally:
+    db.close()
+'
+```
