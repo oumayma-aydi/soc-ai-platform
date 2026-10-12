@@ -355,17 +355,24 @@ npm run dev
 
 
 ```bash
+```bash
 python -c '
 from app.core.database import SessionLocal
 from app.models.orm import UserORM
+from datetime import datetime, timezone
 
 db = SessionLocal()
 try:
-    users = db.query(UserORM).all()
-    for u in users:
-        print(u.username, "|", u.role, "| actif:", u.is_active,
-              "| password_updated_at:", u.password_updated_at)
+    user = db.query(UserORM).filter(UserORM.username == "admin").first()
+    if user:
+        user.password_updated_at = datetime.now(timezone.utc)
+        user.failed_login_attempts = 0
+        db.commit()
+        print("OK - date du mot de passe actualisee")
+    else:
+        print("Utilisateur admin introuvable")
 finally:
     db.close()
 '
+```
 ```
