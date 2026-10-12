@@ -351,3 +351,20 @@ npm run dev
 - Le repo a été temporairement mis en public pour transfert vers ce poste — **vérifier qu'il est repassé en privé** (`gh repo edit oumayma-aydi/soc-ai-platform --visibility private`)
 - Plusieurs clés API et secrets ont été exposés à un moment (conversation, ancien commit Git) — si une clé semble ancienne/jamais régénérée, considérer une rotation par précaution plutôt que de supposer qu'elle est toujours sûre
 - Toujours vérifier avant un push : `git log --all --full-history -- "*.env" "*secret*.yaml"` doit renvoyer vide
+
+
+
+cd ~/projects/soc-ai-platform/backend
+python -c "
+from app.core.database import SessionLocal
+from app.models.orm import UserORM
+from datetime import datetime, timezone
+
+db = SessionLocal()
+user = db.query(UserORM).filter(UserORM.username == 'admin').first()
+user.password_updated_at = datetime.now(timezone.utc)
+user.failed_login_attempts = 0
+db.commit()
+print('OK — password_updated_at remis à maintenant')
+db.close()
+"
